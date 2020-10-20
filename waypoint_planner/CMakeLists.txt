@@ -20,6 +20,7 @@ find_package(
     std_msgs
     tf
     vector_map
+    sched_server
 )
 
 catkin_package()

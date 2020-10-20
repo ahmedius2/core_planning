@@ -22,5 +22,6 @@
   <depend>tf2</depend>
   <depend>tf</depend>
   <depend>roslint</depend>
+  <depend>sched_server</depend>
 
 </package>

@@ -12,6 +12,7 @@ find_package(
     roscpp
     roslint
     std_msgs
+    sched_server
 )
 
 catkin_package(

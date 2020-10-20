@@ -15,10 +15,14 @@
  */
 
 #include "waypoint_planner/astar_avoid/astar_avoid.h"
+#include "sched_server/time_profiling_spinner.h"
+#include <signal.h>
 
 int main(int argc, char** argv)
 {
-  ros::init(argc, argv, "astar_avoid");
+  //ros::init(argc, argv, "astar_avoid");
+  ros::init(argc, argv, "astar_avoid", ros::init_options::NoSigintHandler);
+  signal(SIGINT, TimeProfilingSpinner::signalHandler);
   AstarAvoid node;
   node.run();
   return 0;

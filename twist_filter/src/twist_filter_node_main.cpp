@@ -15,11 +15,19 @@
  */
 
 #include "twist_filter/twist_filter_node.h"
+#include "sched_server/sched_client.hpp"
+#include "sched_server/time_profiling_spinner.h"
 
 int main(int argc, char** argv)
 {
   ros::init(argc, argv, "twist_filter");
   twist_filter_node::TwistFilterNode node;
-  ros::spin();
+  //ros::spin();
+  SchedClient::ConfigureSchedOfCallingThread();
+  const int pure_pursuit_default_freq=30;
+  TimeProfilingSpinner spinner(pure_pursuit_default_freq, 
+    DEFAULT_EXEC_TIME_MINUTES);
+  spinner.spinAndProfileUntilShutdown();
+  spinner.saveProfilingData();
   return 0;
 }

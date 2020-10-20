@@ -30,6 +30,8 @@
  */
 
 #include "costmap_generator/costmap_generator.h"
+#include "sched_server/sched_client.hpp"
+#include "sched_server/time_profiling_spinner.h"
 
 int main(int argc, char** argv)
 {
@@ -37,7 +39,12 @@ int main(int argc, char** argv)
   CostmapGenerator costmap_generator;
   costmap_generator.init();
   costmap_generator.run();
-  ros::spin();
+  //ros::spin();
+  SchedClient::ConfigureSchedOfCallingThread();
+  TimeProfilingSpinner spinner(DEFAULT_CALLBACK_FREQ_HZ,
+  DEFAULT_EXEC_TIME_MINUTES);
+  spinner.spinAndProfileUntilShutdown();
+  spinner.saveProfilingData();
 
   return 0;
 }

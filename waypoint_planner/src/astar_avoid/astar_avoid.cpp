@@ -15,6 +15,8 @@
  */
 
 #include "waypoint_planner/astar_avoid/astar_avoid.h"
+#include "sched_server/sched_client.hpp"
+#include "sched_server/time_profiling_spinner.h"
 
 AstarAvoid::AstarAvoid()
   : nh_()
@@ -134,14 +136,20 @@ void AstarAvoid::run()
   // check topics
   state_ = AstarAvoid::STATE::INITIALIZING;
 
+  SchedClient::ConfigureSchedOfCallingThread();
+  TimeProfilingSpinner spinner(update_rate_,
+    DEFAULT_EXEC_TIME_MINUTES);
+
   while (ros::ok())
   {
+    spinner.measureStartTime();
     ros::spinOnce();
+    spinner.measureAndSaveEndTime();
     if (checkInitialized())
     {
       break;
     }
-    ROS_WARN("Waiting for subscribing topics...");
+    ROS_WARN("Astar Avoid waiting for subscribing topics...");
     ros::Duration(1.0).sleep();
   }
 
@@ -158,14 +166,17 @@ void AstarAvoid::run()
 
   // start publish thread
   publish_thread_ = std::thread(&AstarAvoid::publishWaypoints, this);
-
+  
   while (ros::ok())
   {
+    spinner.measureStartTime();
     ros::spinOnce();
 
-    // relay mode
+    // relay mode 
     if (!enable_avoidance_)
     {
+      //publishWaypoints();
+      spinner.measureAndSaveEndTime();
       rate_->sleep();
       continue;
     }
@@ -235,10 +246,13 @@ void AstarAvoid::run()
       }
     }
 
+    //publishWaypoints();
+    spinner.measureAndSaveEndTime();
+    // ROS_INFO("Astar avoid is spinning...");
     rate_->sleep();
   }
-
   terminate_thread_ = true;
+  spinner.saveProfilingData();
 }
 
 bool AstarAvoid::checkInitialized()
@@ -246,14 +260,28 @@ bool AstarAvoid::checkInitialized()
   bool initialized = false;
 
   // check for relay mode
-  initialized = (current_pose_initialized_ && closest_waypoint_initialized_ && base_waypoints_initialized_ &&
-                 (closest_waypoint_index_ >= 0));
+  initialized = (current_pose_initialized_ && closest_waypoint_initialized_
+              && base_waypoints_initialized_ && (closest_waypoint_index_ >= 0));
 
   // check for avoidance mode, additionally
   if (enable_avoidance_)
   {
-    initialized = (initialized && (current_velocity_initialized_ && costmap_initialized_));
+    initialized = (initialized &&
+                   (current_velocity_initialized_ && costmap_initialized_));
   }
+
+  if(!current_pose_initialized_)
+    ROS_INFO("current_pose_initialized_=false");
+  if(!closest_waypoint_initialized_)
+    ROS_INFO("closest_waypoint_initialized_=false");
+  if(!base_waypoints_initialized_)
+    ROS_INFO("base_waypoints_initialized_=false");
+  if(!closest_waypoint_index_)
+    ROS_INFO("closest_waypoint_index_=false");
+  if(!current_velocity_initialized_)
+    ROS_INFO("current_velocity_initialized_=false");
+  if(!costmap_initialized_)
+    ROS_INFO("costmap_initialized_=false");
 
   return initialized;
 }
@@ -354,8 +382,14 @@ void AstarAvoid::publishWaypoints()
 {
   autoware_msgs::Lane current_waypoints;
 
+  SchedClient::ConfigureSchedOfCallingThread();
+  TimeProfilingSpinner thread_spinner(update_rate_,
+    DEFAULT_EXEC_TIME_MINUTES, "_helper");
+
+  ros::Rate rt(update_rate_);
   while (!terminate_thread_)
   {
+    thread_spinner.measureStartTime();
     // select waypoints
     switch (state_)
     {
@@ -396,9 +430,11 @@ void AstarAvoid::publishWaypoints()
     {
       safety_waypoints_pub_.publish(safety_waypoints);
     }
-
-    rate_->sleep();
+    thread_spinner.measureAndSaveEndTime();
+    //rate_->sleep();
+    rt.sleep();
   }
+  thread_spinner.saveProfilingData();
 }
 
 tf::Transform AstarAvoid::getTransform(const std::string& from, const std::string& to)

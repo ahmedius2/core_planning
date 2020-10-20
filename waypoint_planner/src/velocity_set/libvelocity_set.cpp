@@ -248,6 +248,17 @@ void CrossWalk::setCrossWalkPoints()
   set_points = true;
 }
 
+// Algorithm
+// 0- We already had the list of crosswalks from vector map at init
+// 1- For each waypoint of the current lane
+// 2-   If it is above crosswalk searching_distance, goto 1
+// 3-   For each crosswalk in the list, compare its distance to the selected waypoint
+// 4-     If the distance is less then ignore_distance, goto 3
+// 5-     For each point of the selected crosswalk, compare its distance to selected waypoint
+// 6-       If it is less than find_distance for any point, add that waypoint to the list of detected crosswalks
+// 7- return closest detected waypoint
+
+
 int CrossWalk::findClosestCrosswalk(const int closest_waypoint, const autoware_msgs::Lane &lane,
                                     const int search_distance)
 {
@@ -274,7 +285,7 @@ int CrossWalk::findClosestCrosswalk(const int closest_waypoint, const autoware_m
       crosswalk_center.z = 0.0;
       if (calcSquareOfLength(crosswalk_center, waypoint) > ignore_distance)
         continue;
-
+      // why detect same crosswalk multiple times?
       for (auto p : getDetectionPoints(i).points)
       {
         p.z = waypoint.z;

@@ -17,6 +17,7 @@ find_package(
     std_msgs
     tf
     tf2
+    sched_server
 )
 
 catkin_package(

@@ -23,6 +23,9 @@
 #include <waypoint_planner/velocity_set/velocity_set_info.h>
 #include <waypoint_planner/velocity_set/velocity_set_path.h>
 
+#include "sched_server/sched_client.hpp"
+#include "sched_server/time_profiling_spinner.h"
+
 namespace
 {
 constexpr int LOOP_RATE = 10;
@@ -244,6 +247,10 @@ EControl crossWalkDetection(const pcl::PointCloud<pcl::PointXYZ>& points, const 
   return EControl::KEEP;  // find no obstacles
 }
 
+//For each waypoint in the search distance
+//  if another node has already detected a stop obstacle, break and return stop obstacle waypoint
+//  else if there is an obstacle on the previously determined crosswalk (check with pcloud)), break and return stop obstacle waypoint
+//  else if there is an obstacle on the waypoint being processed (check with pcloud), break and return stop obstacle waypoint
 int detectStopObstacle(const pcl::PointCloud<pcl::PointXYZ>& points, const int closest_waypoint,
                        const autoware_msgs::Lane& lane, const CrossWalk& crosswalk, double stop_range,
                        double points_threshold, const geometry_msgs::PoseStamped& localizer_pose,
@@ -320,6 +327,8 @@ int detectStopObstacle(const pcl::PointCloud<pcl::PointXYZ>& points, const int c
   return stop_obstacle_waypoint;
 }
 
+//For each waypoint in the search distance
+//  if there is an obstacle on the waypoint being processed (check with pcloud), break and return decelerate obstacle waypoint
 int detectDecelerateObstacle(const pcl::PointCloud<pcl::PointXYZ>& points, const int closest_waypoint,
                              const autoware_msgs::Lane& lane, const double stop_range, const double deceleration_range,
                              const double points_threshold, const geometry_msgs::PoseStamped& localizer_pose,
@@ -338,6 +347,8 @@ int detectDecelerateObstacle(const pcl::PointCloud<pcl::PointXYZ>& points, const
     tf::Vector3 tf_waypoint = point2vector(waypoint);
     tf_waypoint.setZ(0);
 
+    //why go over all points in each iteration? how about clustering/grouping the points in the beginning, and searching
+    //the spesific part close to waypoint being searched?
     int decelerate_point_count = 0;
     for (const auto& p : points)
     {
@@ -571,9 +582,13 @@ int main(int argc, char** argv)
   ros::Publisher final_waypoints_pub;
   final_waypoints_pub = nh.advertise<autoware_msgs::Lane>("final_waypoints", 1, true);
 
+  SchedClient::ConfigureSchedOfCallingThread();
+  TimeProfilingSpinner spinner(LOOP_RATE,
+    DEFAULT_EXEC_TIME_MINUTES);
   ros::Rate loop_rate(LOOP_RATE);
   while (ros::ok())
   {
+    spinner.measureStartTime();
     ros::spinOnce();
 
     int closest_waypoint = 0;
@@ -583,6 +598,7 @@ int main(int argc, char** argv)
 
     if (!vs_info.getSetPose() || !vs_path.getSetPath() || vs_path.getPrevWaypointsSize() == 0)
     {
+      spinner.measureAndSaveEndTime();
       loop_rate.sleep();
       continue;
     }
@@ -624,9 +640,11 @@ int main(int argc, char** argv)
     stopline_waypoint_pub.publish(stopline_waypoint_index);
 
     vs_path.resetFlag();
-
+    
+    spinner.measureAndSaveEndTime();
     loop_rate.sleep();
   }
+  spinner.saveProfilingData();
 
   return 0;
 }

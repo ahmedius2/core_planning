@@ -19,6 +19,8 @@
 
 // User defined includes
 #include "twist_gate/twist_gate.h"
+#include "sched_server/sched_client.hpp"
+#include "sched_server/time_profiling_spinner.h"
 
 int main(int argc, char** argv)
 {
@@ -28,6 +30,12 @@ int main(int argc, char** argv)
 
   TwistGate twist_gate(nh, private_nh);
 
-  ros::spin();
+  //ros::spin();
+  SchedClient::ConfigureSchedOfCallingThread();
+  const int pure_pursuit_default_freq=30;
+  TimeProfilingSpinner spinner(pure_pursuit_default_freq,
+    DEFAULT_EXEC_TIME_MINUTES);
+  spinner.spinAndProfileUntilShutdown();
+  spinner.saveProfilingData();
   return 0;
 }

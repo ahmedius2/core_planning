@@ -12,6 +12,7 @@ find_package(catkin REQUIRED COMPONENTS
   tf
   vector_map
   lanelet2_extension
+  sched_server
 )
 
 catkin_package()

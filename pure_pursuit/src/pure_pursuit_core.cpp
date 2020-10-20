@@ -16,6 +16,8 @@
 
 #include <vector>
 #include <pure_pursuit/pure_pursuit_core.h>
+#include "sched_server/sched_client.hpp"
+#include "sched_server/time_profiling_spinner.h"
 
 namespace waypoint_follower
 {
@@ -95,13 +97,18 @@ void PurePursuitNode::initForROS()
 void PurePursuitNode::run()
 {
   ROS_INFO_STREAM("pure pursuit start");
+  SchedClient::ConfigureSchedOfCallingThread();
   ros::Rate loop_rate(LOOP_RATE_);
+  TimeProfilingSpinner spinner(LOOP_RATE_,
+    DEFAULT_EXEC_TIME_MINUTES);
   while (ros::ok())
   {
+    spinner.measureStartTime();
     ros::spinOnce();
     if (!is_pose_set_ || !is_waypoint_set_ || !is_velocity_set_)
     {
       ROS_WARN("Necessary topics are not subscribed yet ... ");
+      spinner.measureAndSaveEndTime();
       loop_rate.sleep();
       continue;
     }
@@ -142,8 +149,10 @@ void PurePursuitNode::run()
     is_velocity_set_ = false;
     is_waypoint_set_ = false;
 
+    spinner.measureAndSaveEndTime();
     loop_rate.sleep();
   }
+  spinner.saveProfilingData();
 }
 
 void PurePursuitNode::publishTwistStamped(

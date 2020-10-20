@@ -15,6 +15,8 @@
  */
 
 #include "lane_select_core.h"
+#include "sched_server/sched_client.hpp"
+#include "sched_server/time_profiling_spinner.h"
 
 #include <algorithm>
 
@@ -81,7 +83,14 @@ bool LaneSelectNode::isAllTopicsSubscribed()
 {
   if (!is_current_pose_subscribed_ || !is_lane_array_subscribed_ || !is_current_velocity_subscribed_)
   {
-    ROS_WARN("Necessary topics are not subscribed yet. Waiting...");
+    std::string topics_str = "";
+    if(!is_current_pose_subscribed_)
+	    topics_str += "current_pose ";
+    if(!is_lane_array_subscribed_)
+	    topics_str += "traffic_waypoints_array ";
+    if(!is_current_velocity_subscribed_)
+	    topics_str += "current_velocity ";
+    ROS_WARN((topics_str + " topics are not subscribed yet. Waiting...").c_str());
     return false;
   }
   return true;
@@ -721,7 +730,12 @@ void LaneSelectNode::callbackFromConfig(const autoware_config_msgs::ConfigLaneSe
 
 void LaneSelectNode::run()
 {
-  ros::spin();
+  SchedClient::ConfigureSchedOfCallingThread();
+  TimeProfilingSpinner spinner(DEFAULT_CALLBACK_FREQ_HZ,
+  DEFAULT_EXEC_TIME_MINUTES);
+  spinner.spinAndProfileUntilShutdown();
+  spinner.saveProfilingData();
+//  ros::spin();
 }
 
 // distance between target 1 and target2 in 2-D
