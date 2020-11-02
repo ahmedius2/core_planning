@@ -22,4 +22,5 @@
   <depend>vector_map</depend>
   <depend>libwaypoint_follower</depend>
   <depend>waypoint_planner</depend>
+  <depend>sched_server</depend>
 </package>

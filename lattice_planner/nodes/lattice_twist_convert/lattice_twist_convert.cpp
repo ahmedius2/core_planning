@@ -54,14 +54,21 @@
 #include "libwaypoint_follower/libwaypoint_follower.h"
 #include "libtraj_gen.h"
 #include <vector>
-
+#include "sched_server/sched_client.hpp"
+#include "sched_server/time_profiling_spinner.h"
+#include <ros/callback_queue.h>
+#include <ros/forwards.h>
+#include <ros/transport_hints.h>
+#include <thread>
+#include <chrono>
 
 /////////////////////////////////////////////////////////////////
 // Global variables
 /////////////////////////////////////////////////////////////////
 
 // Set update rate
-static const int LOOP_RATE = 15; //Hz
+//static const int LOOP_RATE = 15; //Hz
+static const int LOOP_RATE = 10; //Hz
 
 // Next state time difference
 static const double next_time = 1.00/LOOP_RATE;
@@ -112,34 +119,45 @@ int main(int argc, char **argv)
   // Set up ROS
   ros::init(argc, argv, "command_converter");
 
+  SchedClient::ConfigureSchedOfCallingThread();
+
   // Make handles
   ros::NodeHandle nh;
   ros::NodeHandle private_nh("~");
 
   // Publish the following topics:
   // Commands
-  ros::Publisher cmd_velocity_publisher = nh.advertise<geometry_msgs::TwistStamped>("twist_raw", 10);
+  ros::Publisher cmd_velocity_publisher = nh.advertise<geometry_msgs::TwistStamped>("twist_raw", 1);
 
   // Subscribe to the following topics:
   // Curvature parameters and state parameters
-  ros::Subscriber spline_parameters = nh.subscribe("spline", 1, splineCallback);
-  ros::Subscriber state_parameters = nh.subscribe("state", 1, stateCallback);
+  ros::Subscriber spline_parameters = nh.subscribe("spline", 1, splineCallback, ros::TransportHints().tcpNoDelay());
+  ros::Subscriber state_parameters = nh.subscribe("vehicle_state", 1, stateCallback, ros::TransportHints().tcpNoDelay());
 
   // Setup message to hold commands
   geometry_msgs::TwistStamped twist;
 
   // Setup the loop rate in Hz
-  ros::Rate loop_rate(LOOP_RATE);
+  //ros::Rate loop_rate(LOOP_RATE);
 
   bool endflag = false;
   static  double vdes;
 
+  TimeProfilingSpinner spinner(LOOP_RATE,
+    DEFAULT_EXEC_TIME_MINUTES);
+  ros::CallbackQueue* cq = ros::getGlobalCallbackQueue();
+  auto period = std::chrono::milliseconds(
+          static_cast<int>(1000/LOOP_RATE));
+  auto now = std::chrono::steady_clock::now();
+  auto target = now + period;
   while (ros::ok())
   {
     std_msgs::Bool _lf_stat;
-    
+    spinner.measureStartTime();
 
-    ros::spinOnce();
+    int cb_executed=1;
+    cb_executed += spinner.callAvailableCallbacks(cq);
+
     current_time = ros::Time::now().toSec();
     double elapsedTime = current_time - start_time;
 
@@ -172,7 +190,10 @@ int main(int argc, char **argv)
     
     // Publish messages
     cmd_velocity_publisher.publish(twist);
-    loop_rate.sleep();
+    spinner.measureAndSaveEndTime(cb_executed);
+    std::this_thread::sleep_until(target);
+    target += period;
+//    loop_rate.sleep();
   }
   return 0;
 }

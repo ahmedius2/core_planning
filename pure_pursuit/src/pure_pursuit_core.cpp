@@ -101,14 +101,28 @@ void PurePursuitNode::run()
   ros::Rate loop_rate(LOOP_RATE_);
   TimeProfilingSpinner spinner(LOOP_RATE_,
     DEFAULT_EXEC_TIME_MINUTES);
+  ros::CallbackQueue* cq = ros::getGlobalCallbackQueue();
   while (ros::ok())
   {
     spinner.measureStartTime();
-    ros::spinOnce();
+    int cb_executed=0;
+    ros::CallbackQueue::CallOneResult cor;
+    while(!cq->empty()){
+        cor = cq->callOne();
+        if(cor == ros::CallbackQueue::CallOneResult::Called){
+            ++cb_executed;
+        }
+        else if(cor == ros::CallbackQueue::CallOneResult::TryAgain){
+            ROS_INFO("Couldn't call callback, gonna try again...");
+        }
+        else{
+            break; // disabled or empty
+        }
+    }
     if (!is_pose_set_ || !is_waypoint_set_ || !is_velocity_set_)
     {
       ROS_WARN("Necessary topics are not subscribed yet ... ");
-      spinner.measureAndSaveEndTime();
+      spinner.measureAndSaveEndTime(cb_executed);
       loop_rate.sleep();
       continue;
     }
@@ -149,7 +163,7 @@ void PurePursuitNode::run()
     is_velocity_set_ = false;
     is_waypoint_set_ = false;
 
-    spinner.measureAndSaveEndTime();
+    spinner.measureAndSaveEndTime(cb_executed);
     loop_rate.sleep();
   }
   spinner.saveProfilingData();

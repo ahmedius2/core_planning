@@ -35,6 +35,13 @@
 #include "autoware_msgs/Lane.h"
 #include "libwaypoint_follower/libwaypoint_follower.h"
 #include "libvelocity_set.h"
+#include "sched_server/sched_client.hpp"
+#include "sched_server/time_profiling_spinner.h"
+
+#include <ros/callback_queue.h>
+#include <ros/transport_hints.h>
+#include <thread>
+#include <chrono>
 
 namespace
 {
@@ -799,47 +806,69 @@ void changeWaypoint(EControl detection_result)
 
 int main(int argc, char **argv)
 {
+  std::cerr << "1 Node started: %s" << (ros::isStarted() ? "yes" : "no");
   ros::init(argc, argv, "lattice_velocity_set");
-
+  std::cerr << "2 Node started: %s" << (ros::isStarted() ? "yes" : "no");
+  SchedClient::ConfigureSchedOfCallingThread();
+  std::cerr << "3 Node started: %s" << (ros::isStarted() ? "yes" : "no");
   ros::NodeHandle nh;
+  std::cerr << "4 Node started: %s" << (ros::isStarted() ? "yes" : "no");
   ros::NodeHandle private_nh("~");
+  std::cerr << "5 Node started: %s" << (ros::isStarted() ? "yes" : "no");
 
   bool use_crosswalk_detection;
   private_nh.param<bool>("use_crosswalk_detection", use_crosswalk_detection, true);
 
-  ros::Subscriber localizer_sub = nh.subscribe("localizer_pose", 1, localizerCallback);
-  ros::Subscriber control_pose_sub = nh.subscribe("current_pose", 1, controlCallback);
-  ros::Subscriber vscan_sub = nh.subscribe("vscan_points", 1, vscanCallback);
-  ros::Subscriber base_waypoint_sub = nh.subscribe("base_waypoints", 1, baseWaypointCallback);
-  ros::Subscriber obj_pose_sub = nh.subscribe("obj_pose", 1, objPoseCallback);
-  ros::Subscriber current_vel_sub = nh.subscribe("current_velocity", 1, currentVelCallback);
-  ros::Subscriber config_sub = nh.subscribe("config/lattice_velocity_set", 10, configCallback);
+  ros::Subscriber localizer_sub = nh.subscribe("localizer_pose", 1, localizerCallback, ros::TransportHints().tcpNoDelay());
+  ros::Subscriber control_pose_sub = nh.subscribe("current_pose", 1, controlCallback, ros::TransportHints().tcpNoDelay());
+  ros::Subscriber vscan_sub = nh.subscribe("vscan_points", 1, vscanCallback, ros::TransportHints().tcpNoDelay());
+  ros::Subscriber base_waypoint_sub = nh.subscribe("base_waypoints", 1, baseWaypointCallback, ros::TransportHints().tcpNoDelay());
+  ros::Subscriber obj_pose_sub = nh.subscribe("obj_pose", 1, objPoseCallback, ros::TransportHints().tcpNoDelay());
+  ros::Subscriber current_vel_sub = nh.subscribe("current_velocity", 1, currentVelCallback, ros::TransportHints().tcpNoDelay());
+  ros::Subscriber config_sub = nh.subscribe("config/lattice_velocity_set", 1, configCallback, ros::TransportHints().tcpNoDelay());
 
   //------------------ Vector Map ----------------------//
-  ros::Subscriber sub_dtlane = nh.subscribe("vector_map_info/cross_walk", 1, &CrossWalk::crossWalkCallback, &vmap);
-  ros::Subscriber sub_area = nh.subscribe("vector_map_info/area", 1, &CrossWalk::areaCallback, &vmap);
-  ros::Subscriber sub_line = nh.subscribe("vector_map_info/line", 1, &CrossWalk::lineCallback, &vmap);
-  ros::Subscriber sub_point = nh.subscribe("vector_map_info/point", 1, &CrossWalk::pointCallback, &vmap);
+  ros::Subscriber sub_dtlane = nh.subscribe("vector_map_info/cross_walk", 1, &CrossWalk::crossWalkCallback, &vmap,
+                                           ros::TransportHints().tcpNoDelay());
+  ros::Subscriber sub_area = nh.subscribe("vector_map_info/area", 1, &CrossWalk::areaCallback, &vmap,
+                                           ros::TransportHints().tcpNoDelay());
+  ros::Subscriber sub_line = nh.subscribe("vector_map_info/line", 1, &CrossWalk::lineCallback, &vmap,
+                                           ros::TransportHints().tcpNoDelay());
+  ros::Subscriber sub_point = nh.subscribe("vector_map_info/point", 1, &CrossWalk::pointCallback, &vmap,
+                                           ros::TransportHints().tcpNoDelay());
   //----------------------------------------------------//
 
-  g_range_pub = nh.advertise<visualization_msgs::MarkerArray>("detection_range", 0);
-  g_sound_pub = nh.advertise<std_msgs::String>("sound_player", 10);
-  g_temporal_waypoints_pub = nh.advertise<autoware_msgs::Lane>("temporal_waypoints", 1000, true);
+  g_range_pub = nh.advertise<visualization_msgs::MarkerArray>("detection_range", 1);
+  g_sound_pub = nh.advertise<std_msgs::String>("sound_player", 1);
+  g_temporal_waypoints_pub = nh.advertise<autoware_msgs::Lane>("temporal_waypoints", 1, true);
   ros::Publisher closest_waypoint_pub;
-  closest_waypoint_pub = nh.advertise<std_msgs::Int32>("closest_waypoint", 1000);
-  g_obstacle_pub = nh.advertise<visualization_msgs::Marker>("obstacle", 0);
+  closest_waypoint_pub = nh.advertise<std_msgs::Int32>("closest_waypoint", 1);
+  g_obstacle_pub = nh.advertise<visualization_msgs::Marker>("obstacle", 1);
 
-  ros::Rate loop_rate(LOOP_RATE);
+  TimeProfilingSpinner spinner(LOOP_RATE,
+    DEFAULT_EXEC_TIME_MINUTES);
+
+  //ros::Rate loop_rate(LOOP_RATE);
+  ros::CallbackQueue* cq = ros::getGlobalCallbackQueue();
+  auto period = std::chrono::milliseconds(
+          static_cast<int>(1000/LOOP_RATE));
+  auto now = std::chrono::steady_clock::now();
+  auto target = now + period;
   while (ros::ok())
   {
-    ros::spinOnce();
+    spinner.measureStartTime();
+    int cb_executed=1;
+    cb_executed += spinner.callAvailableCallbacks(cq);
 
     if (vmap.loaded_all && !vmap.set_points)
       vmap.setCrossWalkPoints();
 
     if (g_pose_flag == false || g_path_flag == false)
     {
-      loop_rate.sleep();
+      spinner.measureAndSaveEndTime(cb_executed);
+//      loop_rate.sleep();
+      std::this_thread::sleep_until(target);
+      target += period;
       continue;
     }
 
@@ -858,7 +887,10 @@ int main(int argc, char **argv)
 
     g_vscan.clear();
 
-    loop_rate.sleep();
+    spinner.measureAndSaveEndTime(cb_executed);
+//    loop_rate.sleep();
+    std::this_thread::sleep_until(target);
+    target += period;
   }
 
   return 0;

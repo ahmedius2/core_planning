@@ -17,6 +17,7 @@ find_package(
     tf
     vector_map
     waypoint_planner
+    sched_server
 )
 
 find_package(Armadillo REQUIRED)

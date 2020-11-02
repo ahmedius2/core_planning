@@ -78,12 +78,12 @@ void CostmapGenerator::run()
 
   if (use_objects_box_ || use_objects_convex_hull_)
   {
-    sub_objects_ = nh_.subscribe("/prediction/motion_predictor/objects", 1, &CostmapGenerator::objectsCallback, this);
+    sub_objects_ = nh_.subscribe("/prediction/motion_predictor/objects", 1, &CostmapGenerator::objectsCallback, this, ros::TransportHints().tcpNoDelay());
   }
 
   if (use_points_)
   {
-    sub_points_ = nh_.subscribe("/points_no_ground", 1, &CostmapGenerator::sensorPointsCallback, this);
+    sub_points_ = nh_.subscribe("/points_no_ground", 1, &CostmapGenerator::sensorPointsCallback, this, ros::TransportHints().tcpNoDelay());
   }
 }
 

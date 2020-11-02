@@ -54,6 +54,14 @@
 #include "libtraj_gen.h"
 #include "autoware_can_msgs/CANInfo.h"
 //#include <dbw_mkz_msgs/SteeringReport.h>
+#include "sched_server/sched_client.hpp"
+#include "sched_server/time_profiling_spinner.h"
+#include <ros/callback_queue.h>
+#include <ros/forwards.h>
+#include <ros/transport_hints.h>
+#include <thread>
+#include <chrono>
+#include <signal.h>
 
 
 #define DEBUG_TRAJECTORY_GEN
@@ -514,11 +522,15 @@ int main(int argc, char **argv)
   ROS_INFO_STREAM("Trajectory Generation Begins: ");
 
   // Set up ROS, TO DO: change to proper name (same with rest of the file)
-  ros::init(argc, argv, "lattice_trajectory_gen");
+  ros::init(argc, argv, "lattice_trajectory_gen", ros::init_options::NoSigintHandler);
+  signal(SIGINT, TimeProfilingSpinner::signalHandler);
+
+  SchedClient::ConfigureSchedOfCallingThread();
 
   // Create node handles 
   ros::NodeHandle nh;
   ros::NodeHandle private_nh("~");
+
 
   // Set the parameters for the node
   private_nh.getParam("sim_mode", g_sim_mode);
@@ -530,24 +542,28 @@ int main(int argc, char **argv)
 
   // Publish the following topics: 
   g_vis_pub = nh.advertise<visualization_msgs::Marker>("next_waypoint_mark", 1);
-  g_stat_pub = nh.advertise<std_msgs::Bool>("wf_stat", 0);
+  g_stat_pub = nh.advertise<std_msgs::Bool>("wf_stat", 1);
   // Publish the curvature information:
-  ros::Publisher spline_parameters_pub = nh.advertise<std_msgs::Float64MultiArray>("spline", 10);
-  ros::Publisher state_parameters_pub = nh.advertise<std_msgs::Float64MultiArray>("state", 10);
+  ros::Publisher spline_parameters_pub = nh.advertise<std_msgs::Float64MultiArray>("spline", 1);
+  ros::Publisher state_parameters_pub = nh.advertise<std_msgs::Float64MultiArray>("vehicle_state", 1);
   // Publish the trajectory visualization
-  g_marker_pub = nh.advertise<visualization_msgs::Marker>("cubic_splines_viz", 10);
+  g_marker_pub = nh.advertise<visualization_msgs::Marker>("cubic_splines_viz", 1);
 
   // Subscribe to the following topics: 
-  ros::Subscriber waypoint_subcscriber = nh.subscribe("final_waypoints", 1, WayPointCallback);
-  ros::Subscriber current_pose_subscriber = nh.subscribe("current_pose", 1, currentPoseCallback);
-  ros::Subscriber current_vel_subscriber = nh.subscribe("current_velocity", 1, currentVelCallback);
-  ros::Subscriber config_subscriber = nh.subscribe("config/waypoint_follower", 1, ConfigCallback);
+  ros::Subscriber waypoint_subcscriber = nh.subscribe("final_waypoints", 1, WayPointCallback,
+                                                      ros::TransportHints().tcpNoDelay());
+  ros::Subscriber current_pose_subscriber = nh.subscribe("current_pose", 1, currentPoseCallback,
+                                                      ros::TransportHints().tcpNoDelay());
+  ros::Subscriber current_vel_subscriber = nh.subscribe("current_velocity", 1, currentVelCallback,
+                                                      ros::TransportHints().tcpNoDelay());
+  ros::Subscriber config_subscriber = nh.subscribe("config/waypoint_follower", 1, ConfigCallback,
+                                                      ros::TransportHints().tcpNoDelay());
   ros::Subscriber sub_steering;
   ros::Subscriber can_info;
 
   if(g_prius_mode)
   {
-    can_info = nh.subscribe("can_info", 1, canInfoCallback);
+    can_info = nh.subscribe("can_info", 1, canInfoCallback, ros::TransportHints().tcpNoDelay());
   }
 
   
@@ -562,7 +578,7 @@ int main(int argc, char **argv)
   geometry_msgs::TwistStamped twist;
 
   // Set the loop rate unit is Hz
-  ros::Rate loop_rate(LOOP_RATE); 
+  //ros::Rate loop_rate(LOOP_RATE);
 
   // Set up arrays for perturb and flag to enable easy parallelization via OpenMP pragma
   double perturb[30];
@@ -580,18 +596,30 @@ int main(int argc, char **argv)
   union Spline prev_curvature;
   union State veh_fmm;
 
+  TimeProfilingSpinner spinner(LOOP_RATE,
+    DEFAULT_EXEC_TIME_MINUTES);
   // Here we go....
+  ros::CallbackQueue* cq = ros::getGlobalCallbackQueue();
+  auto period = std::chrono::milliseconds(
+          static_cast<int>(1000/LOOP_RATE));
+  auto now = std::chrono::steady_clock::now();
+  auto target = now + period;
   while (ros::ok())
   {
     std_msgs::Bool _lf_stat;
+    spinner.measureStartTime();
 
-    ros::spinOnce();
+    int cb_executed=1;
+    cb_executed += spinner.callAvailableCallbacks(cq);
 
     // Wait for waypoints (in Runtime Manager) and pose to be set (in RViz)
     if (g_waypoint_set == false || g_pose_set == false)
     {
       ROS_INFO_STREAM("topic waiting...");
-      loop_rate.sleep();
+      spinner.measureAndSaveEndTime(cb_executed);
+      //loop_rate.sleep();
+      std::this_thread::sleep_until(target);
+      target += period;
       continue;
     }
 
@@ -720,7 +748,10 @@ int main(int argc, char **argv)
       }
 
     g_prev_velocity = twist.twist.linear.x;
-    loop_rate.sleep();
+    spinner.measureAndSaveEndTime(cb_executed);
+    std::this_thread::sleep_until(target);
+    target += period;
+    //loop_rate.sleep();
   }
 
   return 0;

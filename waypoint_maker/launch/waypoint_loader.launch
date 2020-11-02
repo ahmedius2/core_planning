@@ -43,5 +43,7 @@
     <param name="end_point_offset" value="$(arg end_point_offset)" />
     <param name="use_decision_maker" value="$(arg use_decision_maker)" />
   </node>
+  <!--
   <node pkg="waypoint_maker" type="waypoint_marker_publisher" name="waypoint_marker_publisher" />
+  -->
 </launch>

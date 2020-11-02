@@ -21,11 +21,12 @@
 int main(int argc, char** argv)
 {
   ros::init(argc, argv, "twist_filter");
+  SchedClient::ConfigureSchedOfCallingThread();
   twist_filter_node::TwistFilterNode node;
   //ros::spin();
-  SchedClient::ConfigureSchedOfCallingThread();
   const int pure_pursuit_default_freq=30;
-  TimeProfilingSpinner spinner(pure_pursuit_default_freq, 
+  const int lattice_twist_convert_freq=10;
+  TimeProfilingSpinner spinner(lattice_twist_convert_freq, 
     DEFAULT_EXEC_TIME_MINUTES);
   spinner.spinAndProfileUntilShutdown();
   spinner.saveProfilingData();

@@ -25,16 +25,17 @@
 int main(int argc, char** argv)
 {
   ros::init(argc, argv, "twist_gate");
+  SchedClient::ConfigureSchedOfCallingThread();
   ros::NodeHandle nh;
   ros::NodeHandle private_nh("~");
 
   TwistGate twist_gate(nh, private_nh);
 
   //ros::spin();
-  SchedClient::ConfigureSchedOfCallingThread();
   const int pure_pursuit_default_freq=30;
-  TimeProfilingSpinner spinner(pure_pursuit_default_freq,
-    DEFAULT_EXEC_TIME_MINUTES);
+  const int lattice_twist_convert_freq=10;
+  TimeProfilingSpinner spinner(lattice_twist_convert_freq,
+		        DEFAULT_EXEC_TIME_MINUTES);
   spinner.spinAndProfileUntilShutdown();
   spinner.saveProfilingData();
   return 0;

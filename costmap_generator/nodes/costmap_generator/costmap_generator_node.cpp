@@ -36,11 +36,11 @@
 int main(int argc, char** argv)
 {
   ros::init(argc, argv, "costmap_generator");
+  SchedClient::ConfigureSchedOfCallingThread();
   CostmapGenerator costmap_generator;
   costmap_generator.init();
   costmap_generator.run();
   //ros::spin();
-  SchedClient::ConfigureSchedOfCallingThread();
   TimeProfilingSpinner spinner(DEFAULT_CALLBACK_FREQ_HZ,
   DEFAULT_EXEC_TIME_MINUTES);
   spinner.spinAndProfileUntilShutdown();

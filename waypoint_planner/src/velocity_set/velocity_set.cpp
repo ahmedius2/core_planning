@@ -585,11 +585,25 @@ int main(int argc, char** argv)
   SchedClient::ConfigureSchedOfCallingThread();
   TimeProfilingSpinner spinner(LOOP_RATE,
     DEFAULT_EXEC_TIME_MINUTES);
+  ros::CallbackQueue* cq = ros::getGlobalCallbackQueue();
   ros::Rate loop_rate(LOOP_RATE);
   while (ros::ok())
   {
     spinner.measureStartTime();
-    ros::spinOnce();
+    int cb_executed=0;
+    ros::CallbackQueue::CallOneResult cor;
+    while(!cq->empty()){
+        cor = cq->callOne();
+        if(cor == ros::CallbackQueue::CallOneResult::Called){
+            ++cb_executed;
+        }
+        else if(cor == ros::CallbackQueue::CallOneResult::TryAgain){
+            ROS_INFO("Couldn't call callback, gonna try again...");
+        }
+        else{
+            break; // disabled or empty
+        }
+    }
 
     int closest_waypoint = 0;
 
@@ -598,7 +612,7 @@ int main(int argc, char** argv)
 
     if (!vs_info.getSetPose() || !vs_path.getSetPath() || vs_path.getPrevWaypointsSize() == 0)
     {
-      spinner.measureAndSaveEndTime();
+      spinner.measureAndSaveEndTime(cb_executed);
       loop_rate.sleep();
       continue;
     }
@@ -641,7 +655,7 @@ int main(int argc, char** argv)
 
     vs_path.resetFlag();
     
-    spinner.measureAndSaveEndTime();
+    spinner.measureAndSaveEndTime(cb_executed);
     loop_rate.sleep();
   }
   spinner.saveProfilingData();

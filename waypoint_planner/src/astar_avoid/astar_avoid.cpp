@@ -139,18 +139,32 @@ void AstarAvoid::run()
   SchedClient::ConfigureSchedOfCallingThread();
   TimeProfilingSpinner spinner(update_rate_,
     DEFAULT_EXEC_TIME_MINUTES);
-
+  ros::CallbackQueue* cq = ros::getGlobalCallbackQueue();
   while (ros::ok())
   {
     spinner.measureStartTime();
-    ros::spinOnce();
-    spinner.measureAndSaveEndTime();
+    int cb_executed=0;
+    ros::CallbackQueue::CallOneResult cor;
+    while(!cq->empty()){
+        cor = cq->callOne();
+        if(cor == ros::CallbackQueue::CallOneResult::Called){
+            ++cb_executed;
+        }
+        else if(cor == ros::CallbackQueue::CallOneResult::TryAgain){
+            ROS_INFO("Couldn't call callback, gonna try again...");
+        }
+        else{
+            break; // disabled or empty
+        }
+    }
+    spinner.measureAndSaveEndTime(cb_executed);
     if (checkInitialized())
     {
       break;
     }
     ROS_WARN("Astar Avoid waiting for subscribing topics...");
-    ros::Duration(1.0).sleep();
+    //ros::Duration(1.0).sleep();
+    rate_->sleep();
   }
 
   // main loop
@@ -165,18 +179,31 @@ void AstarAvoid::run()
   state_ = AstarAvoid::STATE::RELAYING;
 
   // start publish thread
-  publish_thread_ = std::thread(&AstarAvoid::publishWaypoints, this);
+  if(ros::ok())
+    publish_thread_ = std::thread(&AstarAvoid::publishWaypoints, this);
   
   while (ros::ok())
   {
     spinner.measureStartTime();
-    ros::spinOnce();
-
+    int cb_executed=0;
+    ros::CallbackQueue::CallOneResult cor;
+    while(!cq->empty()){
+        cor = cq->callOne();
+        if(cor == ros::CallbackQueue::CallOneResult::Called){
+            ++cb_executed;
+        }
+        else if(cor == ros::CallbackQueue::CallOneResult::TryAgain){
+            ROS_INFO("Couldn't call callback, gonna try again...");
+        }
+        else{
+            break; // disabled or empty
+        }
+    }
     // relay mode 
     if (!enable_avoidance_)
     {
       //publishWaypoints();
-      spinner.measureAndSaveEndTime();
+      spinner.measureAndSaveEndTime(cb_executed);
       rate_->sleep();
       continue;
     }
@@ -247,7 +274,7 @@ void AstarAvoid::run()
     }
 
     //publishWaypoints();
-    spinner.measureAndSaveEndTime();
+    spinner.measureAndSaveEndTime(cb_executed);
     // ROS_INFO("Astar avoid is spinning...");
     rate_->sleep();
   }
@@ -387,7 +414,7 @@ void AstarAvoid::publishWaypoints()
     DEFAULT_EXEC_TIME_MINUTES, "_helper");
 
   ros::Rate rt(update_rate_);
-  while (!terminate_thread_)
+  while (!terminate_thread_ && ros::ok())
   {
     thread_spinner.measureStartTime();
     // select waypoints
@@ -430,7 +457,7 @@ void AstarAvoid::publishWaypoints()
     {
       safety_waypoints_pub_.publish(safety_waypoints);
     }
-    thread_spinner.measureAndSaveEndTime();
+    thread_spinner.measureAndSaveEndTime(1);
     //rate_->sleep();
     rt.sleep();
   }
