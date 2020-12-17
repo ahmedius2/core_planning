@@ -138,7 +138,7 @@ void AstarAvoid::run()
 
   SchedClient::ConfigureSchedOfCallingThread();
   TimeProfilingSpinner spinner(update_rate_,
-    DEFAULT_EXEC_TIME_MINUTES);
+    false);
   ros::CallbackQueue* cq = ros::getGlobalCallbackQueue();
   while (ros::ok())
   {
@@ -411,7 +411,7 @@ void AstarAvoid::publishWaypoints()
 
   SchedClient::ConfigureSchedOfCallingThread();
   TimeProfilingSpinner thread_spinner(update_rate_,
-    DEFAULT_EXEC_TIME_MINUTES, "_helper");
+    false, [](){}, "_helper");
 
   ros::Rate rt(update_rate_);
   while (!terminate_thread_ && ros::ok())

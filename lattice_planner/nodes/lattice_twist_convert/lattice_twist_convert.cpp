@@ -68,7 +68,7 @@
 
 // Set update rate
 //static const int LOOP_RATE = 15; //Hz
-static const int LOOP_RATE = 10; //Hz
+static const int LOOP_RATE = DEFAULT_CALLBACK_FREQ_HZ; //Hz
 
 // Next state time difference
 static const double next_time = 1.00/LOOP_RATE;
@@ -119,8 +119,6 @@ int main(int argc, char **argv)
   // Set up ROS
   ros::init(argc, argv, "command_converter");
 
-  SchedClient::ConfigureSchedOfCallingThread();
-
   // Make handles
   ros::NodeHandle nh;
   ros::NodeHandle private_nh("~");
@@ -134,30 +132,14 @@ int main(int argc, char **argv)
   ros::Subscriber spline_parameters = nh.subscribe("spline", 1, splineCallback, ros::TransportHints().tcpNoDelay());
   ros::Subscriber state_parameters = nh.subscribe("vehicle_state", 1, stateCallback, ros::TransportHints().tcpNoDelay());
 
+  SchedClient::ConfigureSchedOfCallingThread();
+
   // Setup message to hold commands
   geometry_msgs::TwistStamped twist;
-
-  // Setup the loop rate in Hz
-  //ros::Rate loop_rate(LOOP_RATE);
-
   bool endflag = false;
   static  double vdes;
 
-  TimeProfilingSpinner spinner(LOOP_RATE,
-    DEFAULT_EXEC_TIME_MINUTES);
-  ros::CallbackQueue* cq = ros::getGlobalCallbackQueue();
-  auto period = std::chrono::milliseconds(
-          static_cast<int>(1000/LOOP_RATE));
-  auto now = std::chrono::steady_clock::now();
-  auto target = now + period;
-  while (ros::ok())
-  {
-    std_msgs::Bool _lf_stat;
-    spinner.measureStartTime();
-
-    int cb_executed=1;
-    cb_executed += spinner.callAvailableCallbacks(cq);
-
+  std::function<void()> funcToCallEveryPeriod = [&]() {
     current_time = ros::Time::now().toSec();
     double elapsedTime = current_time - start_time;
 
@@ -190,11 +172,13 @@ int main(int argc, char **argv)
     
     // Publish messages
     cmd_velocity_publisher.publish(twist);
-    spinner.measureAndSaveEndTime(cb_executed);
-    std::this_thread::sleep_until(target);
-    target += period;
-//    loop_rate.sleep();
-  }
+    return;
+  };
+
+  TimeProfilingSpinner spinner(LOOP_RATE, false, funcToCallEveryPeriod);
+  spinner.spinAndProfileUntilShutdown();
+  spinner.saveProfilingData();
+
   return 0;
 }
 

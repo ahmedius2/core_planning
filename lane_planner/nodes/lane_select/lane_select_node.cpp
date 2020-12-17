@@ -18,12 +18,10 @@
 #include <ros/ros.h>
 
 #include "lane_select_core.h"
-#include "sched_server/sched_client.hpp"
 
 int main(int argc, char **argv)
 {
   ros::init(argc, argv, "lane_select");
-  SchedClient::ConfigureSchedOfCallingThread();
   lane_planner::LaneSelectNode lsn;
   lsn.run();
 

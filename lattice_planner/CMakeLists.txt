@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(lattice_planner)
 
+set (CMAKE_CXX_STANDARD 11)
+
 find_package(autoware_build_flags REQUIRED)
 
 find_package(

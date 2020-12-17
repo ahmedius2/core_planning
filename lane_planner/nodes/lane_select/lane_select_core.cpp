@@ -16,6 +16,7 @@
 
 #include "lane_select_core.h"
 #include "sched_server/time_profiling_spinner.h"
+#include "sched_server/sched_client.hpp"
 
 #include <algorithm>
 
@@ -729,8 +730,9 @@ void LaneSelectNode::callbackFromConfig(const autoware_config_msgs::ConfigLaneSe
 
 void LaneSelectNode::run()
 {
-  TimeProfilingSpinner spinner(DEFAULT_CALLBACK_FREQ_HZ,
-  DEFAULT_EXEC_TIME_MINUTES);
+  SchedClient::ConfigureSchedOfCallingThread();
+  TimeProfilingSpinner spinner(USE_DEFAULT_CALLBACK_FREQ,
+  false);
   spinner.spinAndProfileUntilShutdown();
   spinner.saveProfilingData();
 //  ros::spin();

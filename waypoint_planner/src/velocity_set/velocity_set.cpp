@@ -584,7 +584,7 @@ int main(int argc, char** argv)
 
   SchedClient::ConfigureSchedOfCallingThread();
   TimeProfilingSpinner spinner(LOOP_RATE,
-    DEFAULT_EXEC_TIME_MINUTES);
+    false);
   ros::CallbackQueue* cq = ros::getGlobalCallbackQueue();
   ros::Rate loop_rate(LOOP_RATE);
   while (ros::ok())

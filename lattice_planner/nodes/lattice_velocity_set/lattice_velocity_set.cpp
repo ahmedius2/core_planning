@@ -42,11 +42,12 @@
 #include <ros/transport_hints.h>
 #include <thread>
 #include <chrono>
+#include <functional>
 
 namespace
 {
 
-const int LOOP_RATE = 10;
+const int LOOP_RATE = DEFAULT_CALLBACK_FREQ_HZ;
 
 geometry_msgs::TwistStamped g_current_twist;
 geometry_msgs::PoseStamped g_localizer_pose;  // pose of sensor
@@ -806,15 +807,9 @@ void changeWaypoint(EControl detection_result)
 
 int main(int argc, char **argv)
 {
-  std::cerr << "1 Node started: %s" << (ros::isStarted() ? "yes" : "no");
   ros::init(argc, argv, "lattice_velocity_set");
-  std::cerr << "2 Node started: %s" << (ros::isStarted() ? "yes" : "no");
-  SchedClient::ConfigureSchedOfCallingThread();
-  std::cerr << "3 Node started: %s" << (ros::isStarted() ? "yes" : "no");
   ros::NodeHandle nh;
-  std::cerr << "4 Node started: %s" << (ros::isStarted() ? "yes" : "no");
   ros::NodeHandle private_nh("~");
-  std::cerr << "5 Node started: %s" << (ros::isStarted() ? "yes" : "no");
 
   bool use_crosswalk_detection;
   private_nh.param<bool>("use_crosswalk_detection", use_crosswalk_detection, true);
@@ -845,53 +840,37 @@ int main(int argc, char **argv)
   closest_waypoint_pub = nh.advertise<std_msgs::Int32>("closest_waypoint", 1);
   g_obstacle_pub = nh.advertise<visualization_msgs::Marker>("obstacle", 1);
 
-  TimeProfilingSpinner spinner(LOOP_RATE,
-    DEFAULT_EXEC_TIME_MINUTES);
+  SchedClient::ConfigureSchedOfCallingThread();
 
-  //ros::Rate loop_rate(LOOP_RATE);
-  ros::CallbackQueue* cq = ros::getGlobalCallbackQueue();
-  auto period = std::chrono::milliseconds(
-          static_cast<int>(1000/LOOP_RATE));
-  auto now = std::chrono::steady_clock::now();
-  auto target = now + period;
-  while (ros::ok())
-  {
-    spinner.measureStartTime();
-    int cb_executed=1;
-    cb_executed += spinner.callAvailableCallbacks(cq);
+    std::function<void()> funcToCallEveryPeriod = [&]() {
+        if (vmap.loaded_all && !vmap.set_points)
+          vmap.setCrossWalkPoints();
 
-    if (vmap.loaded_all && !vmap.set_points)
-      vmap.setCrossWalkPoints();
+        if (g_pose_flag == false || g_path_flag == false)
+        {
+          return;
+        }
 
-    if (g_pose_flag == false || g_path_flag == false)
-    {
-      spinner.measureAndSaveEndTime(cb_executed);
-//      loop_rate.sleep();
-      std::this_thread::sleep_until(target);
-      target += period;
-      continue;
-    }
+        g_closest_waypoint = getClosestWaypoint(g_path_change.getCurrentWaypoints(), g_control_pose.pose);
 
-    g_closest_waypoint = getClosestWaypoint(g_path_change.getCurrentWaypoints(), g_control_pose.pose);
+        std_msgs::Int32 closest_waypoint;
+        closest_waypoint.data = g_closest_waypoint;
+        closest_waypoint_pub.publish(closest_waypoint);
 
-    std_msgs::Int32 closest_waypoint;
-    closest_waypoint.data = g_closest_waypoint;
-    closest_waypoint_pub.publish(closest_waypoint);
+        if (use_crosswalk_detection)
+          vmap.setDetectionWaypoint(findCrossWalk());
 
-    if (use_crosswalk_detection)
-      vmap.setDetectionWaypoint(findCrossWalk());
+        EControl detection_result = obstacleDetection();
 
-    EControl detection_result = obstacleDetection();
+        changeWaypoint(detection_result);
 
-    changeWaypoint(detection_result);
+        g_vscan.clear();
+        return;
+    };
 
-    g_vscan.clear();
-
-    spinner.measureAndSaveEndTime(cb_executed);
-//    loop_rate.sleep();
-    std::this_thread::sleep_until(target);
-    target += period;
-  }
+    TimeProfilingSpinner spinner(LOOP_RATE, false, funcToCallEveryPeriod);
+    spinner.spinAndProfileUntilShutdown();
+    spinner.saveProfilingData();
 
   return 0;
 }

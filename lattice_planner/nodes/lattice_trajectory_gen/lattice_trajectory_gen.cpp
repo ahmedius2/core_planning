@@ -74,7 +74,7 @@
 #define WHEEL_BASE_MKZ (2.84988)
 #define WHEEL_TO_STEERING_MKZ (22.00)
 
-static const int LOOP_RATE = 10; //Hz
+static const int LOOP_RATE = DEFAULT_CALLBACK_FREQ_HZ; //Hz
 
 static const std::string MAP_FRAME = "map";
 static const std::string SIM_BASE_FRAME = "sim_base_link";
@@ -525,7 +525,6 @@ int main(int argc, char **argv)
   ros::init(argc, argv, "lattice_trajectory_gen", ros::init_options::NoSigintHandler);
   signal(SIGINT, TimeProfilingSpinner::signalHandler);
 
-  SchedClient::ConfigureSchedOfCallingThread();
 
   // Create node handles 
   ros::NodeHandle nh;
@@ -596,31 +595,17 @@ int main(int argc, char **argv)
   union Spline prev_curvature;
   union State veh_fmm;
 
-  TimeProfilingSpinner spinner(LOOP_RATE,
-    DEFAULT_EXEC_TIME_MINUTES);
-  // Here we go....
-  ros::CallbackQueue* cq = ros::getGlobalCallbackQueue();
-  auto period = std::chrono::milliseconds(
-          static_cast<int>(1000/LOOP_RATE));
-  auto now = std::chrono::steady_clock::now();
-  auto target = now + period;
-  while (ros::ok())
+  SchedClient::ConfigureSchedOfCallingThread();
+
+  std::function<void()> funcToCallEveryPeriod = [&]()
   {
     std_msgs::Bool _lf_stat;
-    spinner.measureStartTime();
-
-    int cb_executed=1;
-    cb_executed += spinner.callAvailableCallbacks(cq);
 
     // Wait for waypoints (in Runtime Manager) and pose to be set (in RViz)
     if (g_waypoint_set == false || g_pose_set == false)
     {
       ROS_INFO_STREAM("topic waiting...");
-      spinner.measureAndSaveEndTime(cb_executed);
-      //loop_rate.sleep();
-      std::this_thread::sleep_until(target);
-      target += period;
-      continue;
+      return;
     }
 
     // Get the closest waypoinmt
@@ -748,11 +733,12 @@ int main(int argc, char **argv)
       }
 
     g_prev_velocity = twist.twist.linear.x;
-    spinner.measureAndSaveEndTime(cb_executed);
-    std::this_thread::sleep_until(target);
-    target += period;
-    //loop_rate.sleep();
-  }
+    return;
+  };
+
+  TimeProfilingSpinner spinner(LOOP_RATE, false, funcToCallEveryPeriod);
+  spinner.spinAndProfileUntilShutdown();
+  spinner.saveProfilingData();
 
   return 0;
 }
