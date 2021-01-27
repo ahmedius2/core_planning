@@ -585,8 +585,7 @@ int main(int argc, char** argv)
   final_waypoints_pub = nh.advertise<autoware_msgs::Lane>("final_waypoints", 1, true);
 
   SchedClient::ConfigureSchedOfCallingThread();
-  TimeProfilingSpinner spinner(update_rate,
-    DEFAULT_EXEC_TIME_MINUTES);
+  TimeProfilingSpinner spinner(TimeProfilingSpinner::OperationMode::PERIODIC, update_rate);
   ros::CallbackQueue* cq = ros::getGlobalCallbackQueue();
   ros::Rate loop_rate(update_rate);
   while (ros::ok())

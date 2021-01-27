@@ -67,8 +67,7 @@
 /////////////////////////////////////////////////////////////////
 
 // Set update rate
-//static const int LOOP_RATE = 15; //Hz
-static const int LOOP_RATE = DEFAULT_CALLBACK_FREQ_HZ; //Hz
+static const int LOOP_RATE = 10; //Hz, default is 15
 
 // Next state time difference
 static const double next_time = 1.00/LOOP_RATE;
@@ -132,8 +131,6 @@ int main(int argc, char **argv)
   ros::Subscriber spline_parameters = nh.subscribe("spline", 1, splineCallback, ros::TransportHints().tcpNoDelay());
   ros::Subscriber state_parameters = nh.subscribe("vehicle_state", 1, stateCallback, ros::TransportHints().tcpNoDelay());
 
-  SchedClient::ConfigureSchedOfCallingThread();
-
   // Setup message to hold commands
   geometry_msgs::TwistStamped twist;
   bool endflag = false;
@@ -175,8 +172,8 @@ int main(int argc, char **argv)
     return;
   };
 
-  TimeProfilingSpinner spinner(LOOP_RATE, false, funcToCallEveryPeriod);
-  spinner.spinAndProfileUntilShutdown();
+  TimeProfilingSpinner spinner(TimeProfilingSpinner::OperationMode::PERIODIC,
+                               LOOP_RATE, false, funcToCallEveryPeriod);  spinner.spinAndProfileUntilShutdown();
   spinner.saveProfilingData();
 
   return 0;

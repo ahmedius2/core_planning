@@ -106,8 +106,7 @@ void AstarAvoid::run()
   state_ = AstarAvoid::STATE::INITIALIZING;
 
   SchedClient::ConfigureSchedOfCallingThread();
-  TimeProfilingSpinner spinner(update_rate_,
-    false);
+  TimeProfilingSpinner spinner(TimeProfilingSpinner::OperationMode::PERIODIC, update_rate_);
   ros::CallbackQueue* cq = ros::getGlobalCallbackQueue();
   while (ros::ok())
   {

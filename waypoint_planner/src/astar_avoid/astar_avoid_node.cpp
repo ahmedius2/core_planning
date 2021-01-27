@@ -22,7 +22,7 @@ int main(int argc, char** argv)
 {
   //ros::init(argc, argv, "astar_avoid");
   ros::init(argc, argv, "astar_avoid", ros::init_options::NoSigintHandler);
-  signal(SIGINT, TimeProfilingSpinner::signalHandler);
+  signal(SIGINT, TimeProfilingSpinner::signalHandler); 
   AstarAvoid node;
   node.run();
   return 0;

@@ -25,9 +25,7 @@ int main(int argc, char** argv)
   //ros::spin();
   //const int pure_pursuit_default_freq=30;
   const int lattice_twist_convert_freq=10;
-  SchedClient::ConfigureSchedOfCallingThread();
-  TimeProfilingSpinner spinner(DEFAULT_CALLBACK_FREQ_HZ,
-    false);
+  TimeProfilingSpinner spinner(TimeProfilingSpinner::OperationMode::RUN_CB_ON_ARRIVAL);
   spinner.spinAndProfileUntilShutdown();
   spinner.saveProfilingData();
   return 0;

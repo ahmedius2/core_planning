@@ -64,7 +64,7 @@
 #include <signal.h>
 
 
-#define DEBUG_TRAJECTORY_GEN
+//#define DEBUG_TRAJECTORY_GEN
 
 #define WHEEL_ANGLE_MAX (31.28067)
 #define STEERING_ANGLE_MAX (666.00000)
@@ -74,7 +74,7 @@
 #define WHEEL_BASE_MKZ (2.84988)
 #define WHEEL_TO_STEERING_MKZ (22.00)
 
-static const int LOOP_RATE = DEFAULT_CALLBACK_FREQ_HZ; //Hz
+static const int LOOP_RATE = 10; //Hz
 
 static const std::string MAP_FRAME = "map";
 static const std::string SIM_BASE_FRAME = "sim_base_link";
@@ -525,7 +525,6 @@ int main(int argc, char **argv)
   ros::init(argc, argv, "lattice_trajectory_gen", ros::init_options::NoSigintHandler);
   signal(SIGINT, TimeProfilingSpinner::signalHandler);
 
-
   // Create node handles 
   ros::NodeHandle nh;
   ros::NodeHandle private_nh("~");
@@ -594,8 +593,6 @@ int main(int argc, char **argv)
   bool initFlag = FALSE;
   union Spline prev_curvature;
   union State veh_fmm;
-
-  SchedClient::ConfigureSchedOfCallingThread();
 
   std::function<void()> funcToCallEveryPeriod = [&]()
   {
@@ -736,7 +733,8 @@ int main(int argc, char **argv)
     return;
   };
 
-  TimeProfilingSpinner spinner(LOOP_RATE, false, funcToCallEveryPeriod);
+  TimeProfilingSpinner spinner(TimeProfilingSpinner::OperationMode::PERIODIC,
+                               LOOP_RATE, false, funcToCallEveryPeriod);
   spinner.spinAndProfileUntilShutdown();
   spinner.saveProfilingData();
 

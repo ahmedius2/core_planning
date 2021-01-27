@@ -47,7 +47,7 @@
 namespace
 {
 
-const int LOOP_RATE = DEFAULT_CALLBACK_FREQ_HZ;
+const int LOOP_RATE = 10;
 
 geometry_msgs::TwistStamped g_current_twist;
 geometry_msgs::PoseStamped g_localizer_pose;  // pose of sensor
@@ -840,8 +840,6 @@ int main(int argc, char **argv)
   closest_waypoint_pub = nh.advertise<std_msgs::Int32>("closest_waypoint", 1);
   g_obstacle_pub = nh.advertise<visualization_msgs::Marker>("obstacle", 1);
 
-  SchedClient::ConfigureSchedOfCallingThread();
-
     std::function<void()> funcToCallEveryPeriod = [&]() {
         if (vmap.loaded_all && !vmap.set_points)
           vmap.setCrossWalkPoints();
@@ -868,7 +866,8 @@ int main(int argc, char **argv)
         return;
     };
 
-    TimeProfilingSpinner spinner(LOOP_RATE, false, funcToCallEveryPeriod);
+    TimeProfilingSpinner spinner(TimeProfilingSpinner::OperationMode::PERIODIC,
+                                 LOOP_RATE, false, funcToCallEveryPeriod);
     spinner.spinAndProfileUntilShutdown();
     spinner.saveProfilingData();
 

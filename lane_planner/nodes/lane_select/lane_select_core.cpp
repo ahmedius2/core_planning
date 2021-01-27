@@ -673,9 +673,7 @@ void LaneSelectNode::callbackFromConfig(const autoware_config_msgs::ConfigLaneSe
 
 void LaneSelectNode::run()
 {
-  SchedClient::ConfigureSchedOfCallingThread();
-  TimeProfilingSpinner spinner(USE_DEFAULT_CALLBACK_FREQ,
-  false);
+  TimeProfilingSpinner spinner(TimeProfilingSpinner::OperationMode::RUN_CB_ON_ARRIVAL);
   spinner.spinAndProfileUntilShutdown();
   spinner.saveProfilingData();
 //  ros::spin();

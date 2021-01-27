@@ -100,8 +100,8 @@ void PurePursuitNode::run()
   ROS_INFO_STREAM("pure pursuit start");
   SchedClient::ConfigureSchedOfCallingThread();
   ros::Rate loop_rate(update_rate_);
-  TimeProfilingSpinner spinner(update_rate_,
-    false);
+  TimeProfilingSpinner spinner(TimeProfilingSpinner::OperationMode::PERIODIC, update_rate_);
+   
   ros::CallbackQueue* cq = ros::getGlobalCallbackQueue();
   while (ros::ok())
   {
